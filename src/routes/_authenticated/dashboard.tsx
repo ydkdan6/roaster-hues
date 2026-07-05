@@ -79,7 +79,7 @@ function Dashboard() {
       <header className="border-b border-border bg-card">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-primary text-primary-foreground grid place-items-center font-bold">LR</div>
+            {/* <div className="w-9 h-9 rounded-lg bg-primary text-primary-foreground grid place-items-center font-bold">LR</div> */}
             <div>
               <h1 className="font-semibold text-foreground">Staff Dashboard</h1>
               <p className="text-xs text-muted-foreground">{user.email}</p>

@@ -56,9 +56,9 @@ function AuthPage() {
     <div className="min-h-screen flex items-center justify-center p-4 bg-background">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary text-primary-foreground text-2xl font-bold mb-3">
+          {/* <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary text-primary-foreground text-2xl font-bold mb-3">
             LR
-          </div>
+          </div> */}
           <h1 className="text-2xl font-semibold text-foreground">Leave & Roster System</h1>
           <p className="text-sm text-muted-foreground mt-1">Sign in to manage your schedule</p>
         </div>
