@@ -6,6 +6,7 @@ const DecisionSchema = z.object({
   leaveId: z.string().uuid(),
   decision: z.enum(["approved", "rejected"]),
   adminNote: z.string().optional().default(""),
+  coverUserId: z.string().uuid().optional(),
 });
 
 export const decideLeaveRequest = createServerFn({ method: "POST" })
@@ -21,9 +22,7 @@ export const decideLeaveRequest = createServerFn({ method: "POST" })
     if (roleErr) throw new Error(roleErr.message);
     if (!isAdmin) throw new Error("Forbidden: admin only");
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    const { data: updated, error: updErr } = await supabaseAdmin
+    const { data: updated, error: updErr } = await supabase
       .from("leave_requests")
       .update({
         status: data.decision,
@@ -36,19 +35,43 @@ export const decideLeaveRequest = createServerFn({ method: "POST" })
       .single();
     if (updErr || !updated) throw new Error(updErr?.message ?? "Update failed");
 
-    const { data: profile } = await supabaseAdmin
+    const { data: profile } = await supabase
       .from("profiles")
       .select("email, full_name")
       .eq("id", updated.user_id)
       .single();
 
+    // If approved and a cover staff was specified, auto-assign duty coverage
+    // for each day of the leave period.
+    let coverageAssigned = 0;
+    if (data.decision === "approved" && data.coverUserId) {
+      const start = new Date(updated.start_date);
+      const end = new Date(updated.end_date);
+      const rows: Array<{ user_id: string; duty_date: string; shift: string; notes: string; created_by: string }> = [];
+      const noteName = profile?.full_name || profile?.email || "colleague";
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        rows.push({
+          user_id: data.coverUserId,
+          duty_date: d.toISOString().slice(0, 10),
+          shift: "Coverage",
+          notes: `Covering for ${noteName} (${updated.leave_type} leave)`,
+          created_by: userId,
+        });
+      }
+      if (rows.length) {
+        const { error: covErr } = await supabase.from("duty_roster").insert(rows);
+        if (!covErr) coverageAssigned = rows.length;
+        else console.error("Coverage insert failed", covErr);
+      }
+    }
+
     const recipient = profile?.email;
-    if (!recipient) return { ok: true, emailed: false };
+    if (!recipient) return { ok: true, emailed: false, coverageAssigned };
 
     const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
     const RESEND_API_KEY = process.env.RESEND_API_KEY;
     if (!LOVABLE_API_KEY || !RESEND_API_KEY) {
-      return { ok: true, emailed: false, reason: "email_not_configured" };
+      return { ok: true, emailed: false, coverageAssigned, reason: "email_not_configured" };
     }
 
     const isApproved = updated.status === "approved";
@@ -88,10 +111,10 @@ export const decideLeaveRequest = createServerFn({ method: "POST" })
         const body = await res.text();
         console.error("Resend error:", res.status, body);
       }
-      return { ok: true, emailed };
+      return { ok: true, emailed, coverageAssigned };
     } catch (e) {
       console.error("Resend fetch failed", e);
-      return { ok: true, emailed: false };
+      return { ok: true, emailed: false, coverageAssigned };
     }
   });
 
@@ -108,8 +131,7 @@ export const promoteToAdmin = createServerFn({ method: "POST" })
     });
     if (!isAdmin) throw new Error("Forbidden: admin only");
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin
+    const { error } = await supabase
       .from("user_roles")
       .insert({ user_id: data.targetUserId, role: "admin" });
     if (error && !error.message.includes("duplicate")) throw new Error(error.message);

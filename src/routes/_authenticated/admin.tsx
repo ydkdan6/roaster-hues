@@ -11,7 +11,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { CheckCircle2, XCircle, Clock, ClipboardList, Users, CalendarDays, ShieldCheck } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   component: Admin,
@@ -37,7 +39,9 @@ function Admin() {
   const [duties, setDuties] = useState<Duty[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [covers, setCovers] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  const [reportView, setReportView] = useState<null | "total" | "approved" | "rejected" | "pending">(null);
 
   // roster form
   const [rUser, setRUser] = useState("");
@@ -69,8 +73,16 @@ function Admin() {
   async function handleDecision(leaveId: string, decision: "approved" | "rejected") {
     setBusy(leaveId);
     try {
-      const res = await decide({ data: { leaveId, decision, adminNote: notes[leaveId] ?? "" } });
-      toast.success(`Leave ${decision}${res.emailed ? " — email sent" : ""}`);
+      const res = await decide({
+        data: {
+          leaveId,
+          decision,
+          adminNote: notes[leaveId] ?? "",
+          coverUserId: decision === "approved" ? covers[leaveId] || undefined : undefined,
+        },
+      });
+      const covMsg = res.coverageAssigned ? ` · ${res.coverageAssigned}-day coverage assigned` : "";
+      toast.success(`Leave ${decision}${res.emailed ? " — email sent" : ""}${covMsg}`);
       await load();
     } catch (e: any) {
       toast.error(e.message ?? "Failed");
@@ -111,12 +123,14 @@ function Admin() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
+      <header className="border-b border-border bg-gradient-to-r from-primary/15 via-card to-accent/15 backdrop-blur">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {/* <div className="w-9 h-9 rounded-lg bg-primary text-primary-foreground grid place-items-center font-bold">LR</div> */}
+            <div className="w-10 h-10 rounded-xl bg-primary text-primary-foreground grid place-items-center font-bold shadow-md">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
             <div>
-              <h1 className="font-semibold">Admin / Supervisor</h1>
+              <h1 className="font-semibold text-lg">Admin / Supervisor</h1>
               <p className="text-xs text-muted-foreground">{user.email}</p>
             </div>
           </div>
@@ -126,19 +140,20 @@ function Admin() {
 
       <main className="max-w-6xl mx-auto px-6 py-8">
         <Tabs defaultValue="leaves">
-          <TabsList>
-            <TabsTrigger value="leaves">Leave Requests</TabsTrigger>
-            <TabsTrigger value="roster">Duty Roster</TabsTrigger>
+          <TabsList className="bg-secondary/60">
+            <TabsTrigger value="leaves"><ClipboardList className="w-4 h-4 mr-1.5" />Leave Requests</TabsTrigger>
+            <TabsTrigger value="roster"><CalendarDays className="w-4 h-4 mr-1.5" />Duty Roster</TabsTrigger>
             <TabsTrigger value="reports">Reports</TabsTrigger>
-            <TabsTrigger value="users">Users</TabsTrigger>
+            <TabsTrigger value="users"><Users className="w-4 h-4 mr-1.5" />Users</TabsTrigger>
           </TabsList>
 
           <TabsContent value="leaves" className="space-y-3 mt-4">
             {leaves.length === 0 && <p className="text-sm text-muted-foreground">No leave requests.</p>}
             {leaves.map((l) => {
               const p = profileMap.get(l.user_id);
+              const staffChoices = profiles.filter((pf) => pf.id !== l.user_id && !adminIds.has(pf.id));
               return (
-                <Card key={l.id}>
+                <Card key={l.id} className="border-l-4" style={{ borderLeftColor: l.status === "approved" ? "var(--primary)" : l.status === "rejected" ? "var(--destructive)" : "var(--accent)" }}>
                   <CardContent className="pt-6 space-y-3">
                     <div className="flex items-start justify-between gap-4">
                       <div>
@@ -155,6 +170,20 @@ function Admin() {
                     </div>
                     {l.status === "pending" && (
                       <div className="space-y-2 pt-2 border-t border-border">
+                        <div className="space-y-2">
+                          <Label className="text-xs">Assign coverage to (optional)</Label>
+                          <Select value={covers[l.id] ?? ""} onValueChange={(v) => setCovers({ ...covers, [l.id]: v })}>
+                            <SelectTrigger><SelectValue placeholder="Pick a staff to cover during leave" /></SelectTrigger>
+                            <SelectContent>
+                              {staffChoices.map((s) => (
+                                <SelectItem key={s.id} value={s.id}>{s.full_name || s.email}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-[11px] text-muted-foreground">
+                            On approval, duty roster entries are auto-created for the covering staff for each day of leave.
+                          </p>
+                        </div>
                         <Textarea
                           placeholder="Optional note to staff (included in email)"
                           value={notes[l.id] ?? ""}
@@ -162,10 +191,10 @@ function Admin() {
                         />
                         <div className="flex gap-2">
                           <Button disabled={busy === l.id} onClick={() => handleDecision(l.id, "approved")}>
-                            Approve
+                            <CheckCircle2 className="w-4 h-4 mr-1.5" /> Approve
                           </Button>
                           <Button variant="destructive" disabled={busy === l.id} onClick={() => handleDecision(l.id, "rejected")}>
-                            Reject
+                            <XCircle className="w-4 h-4 mr-1.5" /> Reject
                           </Button>
                         </div>
                       </div>
@@ -238,11 +267,12 @@ function Admin() {
 
           <TabsContent value="reports" className="mt-4">
             <div className="grid md:grid-cols-4 gap-4">
-              <ReportStat label="Total requests" value={leaves.length} />
-              <ReportStat label="Approved" value={leaves.filter(l => l.status === "approved").length} />
-              <ReportStat label="Rejected" value={leaves.filter(l => l.status === "rejected").length} />
-              <ReportStat label="Pending" value={leaves.filter(l => l.status === "pending").length} />
+              <ReportStat label="Total requests" value={leaves.length} icon={<ClipboardList className="w-5 h-5" />} onClick={() => setReportView("total")} />
+              <ReportStat label="Approved" value={leaves.filter(l => l.status === "approved").length} icon={<CheckCircle2 className="w-5 h-5" />} tone="primary" onClick={() => setReportView("approved")} />
+              <ReportStat label="Rejected" value={leaves.filter(l => l.status === "rejected").length} icon={<XCircle className="w-5 h-5" />} tone="destructive" onClick={() => setReportView("rejected")} />
+              <ReportStat label="Pending" value={leaves.filter(l => l.status === "pending").length} icon={<Clock className="w-5 h-5" />} tone="accent" onClick={() => setReportView("pending")} />
             </div>
+            <p className="text-xs text-muted-foreground mt-2">Click any card to see the full history.</p>
             <Card className="mt-4">
               <CardHeader><CardTitle>Leave summary by staff</CardTitle></CardHeader>
               <CardContent className="space-y-1">
@@ -262,6 +292,41 @@ function Admin() {
                 })}
               </CardContent>
             </Card>
+
+            <Dialog open={reportView !== null} onOpenChange={(o) => !o && setReportView(null)}>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle className="capitalize">{reportView} leave history</DialogTitle>
+                  <DialogDescription>
+                    {reportView === "total" ? "All leave requests submitted." : `All ${reportView} leave requests.`}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="max-h-[60vh] overflow-y-auto space-y-2 pr-1">
+                  {(reportView ? leaves.filter(l => reportView === "total" ? true : l.status === reportView) : []).map((l) => {
+                    const p = profileMap.get(l.user_id);
+                    return (
+                      <div key={l.id} className="p-3 rounded-lg border border-border">
+                        <div className="flex items-center justify-between">
+                          <div className="font-medium">{p?.full_name || p?.email}</div>
+                          <Badge variant={l.status === "approved" ? "default" : l.status === "rejected" ? "destructive" : "secondary"}>
+                            {l.status}
+                          </Badge>
+                        </div>
+                        <div className="text-sm mt-1"><b>{l.leave_type}</b> · {l.start_date} → {l.end_date}</div>
+                        {l.reason && <div className="text-sm text-muted-foreground mt-1">{l.reason}</div>}
+                        {l.admin_note && <div className="text-xs mt-1 p-2 rounded bg-secondary text-secondary-foreground">Admin: {l.admin_note}</div>}
+                      </div>
+                    );
+                  })}
+                  {reportView && leaves.filter(l => reportView === "total" ? true : l.status === reportView).length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-6">No records.</p>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setReportView(null)}>Close</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           <TabsContent value="users" className="mt-4">
@@ -293,13 +358,23 @@ function Admin() {
   );
 }
 
-function ReportStat({ label, value }: { label: string; value: number }) {
+function ReportStat({ label, value, icon, tone, onClick }: { label: string; value: number; icon?: React.ReactNode; tone?: "primary"|"accent"|"destructive"; onClick?: () => void }) {
+  const bg = tone === "primary" ? "bg-primary/10 text-primary" :
+             tone === "accent" ? "bg-accent/30 text-accent-foreground" :
+             tone === "destructive" ? "bg-destructive/10 text-destructive" :
+             "bg-muted text-muted-foreground";
   return (
-    <Card>
-      <CardContent className="pt-6">
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-left rounded-xl border border-border bg-card p-4 shadow-sm hover:shadow-md hover:border-primary/40 hover:-translate-y-0.5 transition-all"
+    >
+      <div className="flex items-center justify-between">
+        <div className={`w-9 h-9 rounded-lg grid place-items-center ${bg}`}>{icon}</div>
         <div className="text-3xl font-bold text-primary">{value}</div>
-        <div className="text-xs text-muted-foreground mt-1">{label}</div>
-      </CardContent>
-    </Card>
+      </div>
+      <div className="text-xs text-muted-foreground mt-2">{label}</div>
+      <div className="text-[11px] text-primary/70 mt-1">Click to view history →</div>
+    </button>
   );
 }
