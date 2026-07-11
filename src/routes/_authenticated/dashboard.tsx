@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { CalendarDays, ClipboardList, CheckCircle2, Clock, XCircle } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
@@ -58,9 +59,12 @@ function Dashboard() {
 
   async function submitLeave(e: React.FormEvent) {
     e.preventDefault();
+    if (new Date(endDate) < new Date(startDate)) {
+      return toast.error("End date must be after start date");
+    }
     setSubmitting(true);
     const { error } = await supabase.from("leave_requests").insert({
-      user_id: user.id, leave_type: leaveType, start_date: startDate, end_date: endDate, reason,
+      user_id: user.id, leave_type: leaveType, start_date: startDate, end_date: endDate, reason: reason || leaveType + " leave",
     });
     setSubmitting(false);
     if (error) return toast.error(error.message);
@@ -74,14 +78,18 @@ function Dashboard() {
     navigate({ to: "/auth" });
   }
 
+  const approved = leaves.filter(l => l.status === "approved").length;
+  const pending = leaves.filter(l => l.status === "pending").length;
+  const rejected = leaves.filter(l => l.status === "rejected").length;
+
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
+      <header className="border-b border-border bg-gradient-to-r from-primary/10 via-card to-accent/10 backdrop-blur">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {/* <div className="w-9 h-9 rounded-lg bg-primary text-primary-foreground grid place-items-center font-bold">LR</div> */}
+            <div className="w-10 h-10 rounded-xl bg-primary text-primary-foreground grid place-items-center font-bold shadow-md">LR</div>
             <div>
-              <h1 className="font-semibold text-foreground">Staff Dashboard</h1>
+              <h1 className="font-semibold text-foreground text-lg">Staff Dashboard</h1>
               <p className="text-xs text-muted-foreground">{user.email}</p>
             </div>
           </div>
@@ -89,9 +97,19 @@ function Dashboard() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-8 grid lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader><CardTitle>Apply for leave</CardTitle></CardHeader>
+      <main className="max-w-6xl mx-auto px-6 py-8 space-y-6">
+        <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <MiniStat icon={<ClipboardList className="w-4 h-4" />} label="Total" value={leaves.length} tone="muted" />
+          <MiniStat icon={<CheckCircle2 className="w-4 h-4" />} label="Approved" value={approved} tone="primary" />
+          <MiniStat icon={<Clock className="w-4 h-4" />} label="Pending" value={pending} tone="accent" />
+          <MiniStat icon={<XCircle className="w-4 h-4" />} label="Rejected" value={rejected} tone="destructive" />
+        </section>
+
+        <div className="grid lg:grid-cols-2 gap-6">
+        <Card className="border-primary/20 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><CalendarDays className="w-5 h-5 text-primary" /> Apply for leave</CardTitle>
+          </CardHeader>
           <CardContent>
             <form onSubmit={submitLeave} className="space-y-4">
               <div className="space-y-2">
@@ -116,8 +134,8 @@ function Dashboard() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Reason</Label>
-                <Textarea required value={reason} onChange={(e) => setReason(e.target.value)} rows={3} />
+                <Label>Additional notes <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="Anything the admin should know" />
               </div>
               <Button type="submit" className="w-full" disabled={submitting}>
                 {submitting ? "Submitting..." : "Submit request"}
@@ -161,7 +179,24 @@ function Dashboard() {
             </CardContent>
           </Card>
         </div>
+        </div>
       </main>
+    </div>
+  );
+}
+
+function MiniStat({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: number; tone: "primary"|"accent"|"muted"|"destructive" }) {
+  const bg = tone === "primary" ? "bg-primary/10 text-primary" :
+             tone === "accent" ? "bg-accent/30 text-accent-foreground" :
+             tone === "destructive" ? "bg-destructive/10 text-destructive" :
+             "bg-muted text-muted-foreground";
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 flex items-center gap-3 shadow-sm">
+      <div className={`w-9 h-9 rounded-lg grid place-items-center ${bg}`}>{icon}</div>
+      <div>
+        <div className="text-xl font-bold">{value}</div>
+        <div className="text-xs text-muted-foreground">{label}</div>
+      </div>
     </div>
   );
 }
