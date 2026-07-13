@@ -42,8 +42,10 @@ export const decideLeaveRequest = createServerFn({ method: "POST" })
       .single();
 
     // If approved and a cover staff was specified, auto-assign duty coverage
-    // for each day of the leave period.
+    // for each day of the leave period, and notify that staff member.
     let coverageAssigned = 0;
+    let coverEmailed = false;
+    let coverProfile: { email: string; full_name: string } | null = null;
     if (data.decision === "approved" && data.coverUserId) {
       const start = new Date(updated.start_date);
       const end = new Date(updated.end_date);
@@ -63,60 +65,103 @@ export const decideLeaveRequest = createServerFn({ method: "POST" })
         if (!covErr) coverageAssigned = rows.length;
         else console.error("Coverage insert failed", covErr);
       }
-    }
-
-    const recipient = profile?.email;
-    if (!recipient) return { ok: true, emailed: false, coverageAssigned };
-
-    const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
-    const RESEND_API_KEY = process.env.RESEND_API_KEY;
-    if (!LOVABLE_API_KEY || !RESEND_API_KEY) {
-      return { ok: true, emailed: false, coverageAssigned, reason: "email_not_configured" };
+      const { data: cp } = await supabase
+        .from("profiles")
+        .select("email, full_name")
+        .eq("id", data.coverUserId)
+        .single();
+      if (cp?.email) coverProfile = { email: cp.email, full_name: cp.full_name ?? "" };
     }
 
     const isApproved = updated.status === "approved";
-    const subject = isApproved
+    const staffColor = isApproved ? "#166534" : "#991b1b";
+    const staffHeading = isApproved ? "Leave approved" : "Leave rejected";
+    const staffSubject = isApproved
       ? "Your leave request has been approved"
       : "Your leave request was not approved";
-    const color = isApproved ? "#16a34a" : "#b91c1c";
-    const heading = isApproved ? "Leave approved" : "Leave rejected";
-    const html = `
-      <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;background:#fafaf6;color:#1f2a24">
-        <h2 style="color:${color};margin:0 0 12px 0">${heading}</h2>
-        <p>Hi ${profile?.full_name || "there"},</p>
-        <p>Your <b>${updated.leave_type}</b> leave request from
+    const staffHtml = renderEmail({
+      accent: staffColor,
+      heading: staffHeading,
+      greeting: `Hi ${profile?.full_name || "there"},`,
+      body: `<p>Your <b>${updated.leave_type}</b> leave request from
           <b>${updated.start_date}</b> to <b>${updated.end_date}</b> has been
-          <b style="color:${color}">${updated.status}</b>.</p>
-        ${updated.admin_note ? `<p style="background:#fff;border-left:3px solid ${color};padding:10px 12px"><b>Note from admin:</b><br/>${updated.admin_note}</p>` : ""}
-        <p style="color:#4b5563;font-size:12px;margin-top:24px">Staff Leave & Duty Roster System</p>
-      </div>`;
+          <b style="color:${staffColor}">${updated.status}</b>.</p>` +
+        (updated.admin_note
+          ? `<p style="background:#f6faf5;border-left:3px solid ${staffColor};padding:10px 12px;margin-top:14px"><b>Note from admin:</b><br/>${updated.admin_note}</p>`
+          : ""),
+    });
 
-    try {
-      const res = await fetch("https://connector-gateway.lovable.dev/resend/emails", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "X-Connection-Api-Key": RESEND_API_KEY,
-        },
-        body: JSON.stringify({
-          from: "Leave System <onboarding@resend.dev>",
-          to: [recipient],
-          subject,
-          html,
-        }),
+    const emailed = profile?.email
+      ? await sendEmail({ to: profile.email, subject: staffSubject, html: staffHtml })
+      : false;
+
+    if (coverProfile) {
+      const coverHtml = renderEmail({
+        accent: "#166534",
+        heading: "You've been assigned coverage duty",
+        greeting: `Hi ${coverProfile.full_name || "there"},`,
+        body: `<p>You have been assigned to cover for
+          <b>${profile?.full_name || profile?.email || "a colleague"}</b>
+          during their <b>${updated.leave_type}</b> leave from
+          <b>${updated.start_date}</b> to <b>${updated.end_date}</b>.</p>
+          <p>${coverageAssigned} coverage duty ${coverageAssigned === 1 ? "entry has" : "entries have"} been added to your roster. Please sign in to view details.</p>`,
       });
-      const emailed = res.ok;
-      if (!emailed) {
-        const body = await res.text();
-        console.error("Resend error:", res.status, body);
-      }
-      return { ok: true, emailed, coverageAssigned };
-    } catch (e) {
-      console.error("Resend fetch failed", e);
-      return { ok: true, emailed: false, coverageAssigned };
+      coverEmailed = await sendEmail({
+        to: coverProfile.email,
+        subject: `Coverage duty assigned: ${updated.start_date} → ${updated.end_date}`,
+        html: coverHtml,
+      });
     }
+
+    return { ok: true, emailed, coverageAssigned, coverEmailed };
   });
+
+function renderEmail({ accent, heading, greeting, body }: { accent: string; heading: string; greeting: string; body: string }) {
+  return `
+    <div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;max-width:560px;margin:0 auto;padding:0;background:#ffffff;color:#1f2a24">
+      <div style="border:1px solid #e6ece4;border-radius:14px;overflow:hidden">
+        <div style="background:#f6faf5;border-bottom:3px solid ${accent};padding:20px 24px">
+          <div style="font-size:12px;letter-spacing:.08em;color:#4b5f52;text-transform:uppercase">Leave &amp; Duty Roster</div>
+          <h2 style="color:${accent};margin:6px 0 0 0;font-size:20px">${heading}</h2>
+        </div>
+        <div style="padding:22px 24px;line-height:1.55;font-size:14px">
+          <p style="margin:0 0 12px 0">${greeting}</p>
+          ${body}
+          <p style="color:#6b7a71;font-size:12px;margin-top:26px">Staff Leave &amp; Duty Roster System</p>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function sendEmail({ to, subject, html }: { to: string; subject: string; html: string }): Promise<boolean> {
+  const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
+  const RESEND_API_KEY = process.env.RESEND_API_KEY;
+  if (!LOVABLE_API_KEY || !RESEND_API_KEY) {
+    console.error("Email not configured: missing LOVABLE_API_KEY or RESEND_API_KEY");
+    return false;
+  }
+  const from = process.env.RESEND_FROM_EMAIL || "Leave System <onboarding@resend.dev>";
+  try {
+    const res = await fetch("https://connector-gateway.lovable.dev/resend/emails", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "X-Connection-Api-Key": RESEND_API_KEY,
+      },
+      body: JSON.stringify({ from, to: [to], subject, html }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      console.error(`Resend error [${res.status}] to=${to}:`, body);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error("Resend fetch failed", e);
+    return false;
+  }
+}
 
 const PromoteSchema = z.object({ targetUserId: z.string().uuid() });
 

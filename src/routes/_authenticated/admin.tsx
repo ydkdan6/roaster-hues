@@ -82,7 +82,9 @@ function Admin() {
         },
       });
       const covMsg = res.coverageAssigned ? ` · ${res.coverageAssigned}-day coverage assigned` : "";
-      toast.success(`Leave ${decision}${res.emailed ? " — email sent" : ""}${covMsg}`);
+      const coverEmail = res.coverEmailed ? " · cover notified" : "";
+      toast.success(`Leave ${decision}${res.emailed ? " — email sent" : ""}${covMsg}${coverEmail}`);
+      if (!res.emailed) toast.warning("Email delivery failed. Verify a domain in Resend to send to real recipients.");
       await load();
     } catch (e: any) {
       toast.error(e.message ?? "Failed");
