@@ -91,9 +91,10 @@ export const decideLeaveRequest = createServerFn({ method: "POST" })
           : ""),
     });
 
-    const emailed = profile?.email
+    const staffEmailResult = profile?.email
       ? await sendEmail({ to: profile.email, subject: staffSubject, html: staffHtml })
-      : false;
+      : { ok: false, error: "Staff email address is missing" };
+    const emailed = staffEmailResult.ok;
 
     if (coverProfile) {
       const coverHtml = renderEmail({
@@ -106,11 +107,12 @@ export const decideLeaveRequest = createServerFn({ method: "POST" })
           <b>${updated.start_date}</b> to <b>${updated.end_date}</b>.</p>
           <p>${coverageAssigned} coverage duty ${coverageAssigned === 1 ? "entry has" : "entries have"} been added to your roster. Please sign in to view details.</p>`,
       });
-      coverEmailed = await sendEmail({
+      const coverEmailResult = await sendEmail({
         to: coverProfile.email,
         subject: `Coverage duty assigned: ${updated.start_date} → ${updated.end_date}`,
         html: coverHtml,
       });
+      coverEmailed = coverEmailResult.ok;
     }
 
     return { ok: true, emailed, coverageAssigned, coverEmailed };
@@ -133,14 +135,14 @@ function renderEmail({ accent, heading, greeting, body }: { accent: string; head
     </div>`;
 }
 
-async function sendEmail({ to, subject, html }: { to: string; subject: string; html: string }): Promise<boolean> {
+async function sendEmail({ to, subject, html }: { to: string; subject: string; html: string }): Promise<{ ok: boolean; error?: string }> {
   const serviceId = process.env.EMAILJS_SERVICE_ID;
   const templateId = process.env.EMAILJS_TEMPLATE_ID;
   const publicKey = process.env.EMAILJS_PUBLIC_KEY;
   const privateKey = process.env.EMAILJS_PRIVATE_KEY;
   if (!serviceId || !templateId || !publicKey || !privateKey) {
     console.error("EmailJS not configured: missing one of EMAILJS_SERVICE_ID/TEMPLATE_ID/PUBLIC_KEY/PRIVATE_KEY");
-    return false;
+    return { ok: false, error: "EmailJS is not configured" };
   }
   try {
     const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
@@ -152,7 +154,7 @@ async function sendEmail({ to, subject, html }: { to: string; subject: string; h
         user_id: publicKey,
         accessToken: privateKey,
         template_params: {
-          to_email: to,
+          email: to,
           subject,
           message_html: html,
           from_name: "Leave & Duty Roster",
@@ -162,12 +164,12 @@ async function sendEmail({ to, subject, html }: { to: string; subject: string; h
     if (!res.ok) {
       const body = await res.text();
       console.error(`EmailJS error [${res.status}] to=${to}:`, body);
-      return false;
+      return { ok: false, error: body || `EmailJS returned ${res.status}` };
     }
-    return true;
+    return { ok: true };
   } catch (e) {
     console.error("EmailJS fetch failed", e);
-    return false;
+    return { ok: false, error: e instanceof Error ? e.message : "EmailJS request failed" };
   }
 }
 
