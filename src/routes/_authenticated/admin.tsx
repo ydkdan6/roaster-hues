@@ -84,7 +84,7 @@ function Admin() {
       const covMsg = res.coverageAssigned ? ` · ${res.coverageAssigned}-day coverage assigned` : "";
       const coverEmail = res.coverEmailed ? " · cover notified" : "";
       toast.success(`Leave ${decision}${res.emailed ? " — email sent" : ""}${covMsg}${coverEmail}`);
-      if (!res.emailed) toast.warning("Email delivery failed. Verify a domain in Resend to send to real recipients.");
+      if (!res.emailed) toast.warning("EmailJS delivery failed. Check the EmailJS service, template variables, and non-browser API access setting.");
       await load();
     } catch (e: any) {
       toast.error(e.message ?? "Failed");
