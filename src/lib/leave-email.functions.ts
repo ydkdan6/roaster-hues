@@ -134,31 +134,39 @@ function renderEmail({ accent, heading, greeting, body }: { accent: string; head
 }
 
 async function sendEmail({ to, subject, html }: { to: string; subject: string; html: string }): Promise<boolean> {
-  const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
-  const RESEND_API_KEY = process.env.RESEND_API_KEY;
-  if (!LOVABLE_API_KEY || !RESEND_API_KEY) {
-    console.error("Email not configured: missing LOVABLE_API_KEY or RESEND_API_KEY");
+  const serviceId = process.env.EMAILJS_SERVICE_ID;
+  const templateId = process.env.EMAILJS_TEMPLATE_ID;
+  const publicKey = process.env.EMAILJS_PUBLIC_KEY;
+  const privateKey = process.env.EMAILJS_PRIVATE_KEY;
+  if (!serviceId || !templateId || !publicKey || !privateKey) {
+    console.error("EmailJS not configured: missing one of EMAILJS_SERVICE_ID/TEMPLATE_ID/PUBLIC_KEY/PRIVATE_KEY");
     return false;
   }
-  const from = process.env.RESEND_FROM_EMAIL || "Leave System <onboarding@resend.dev>";
   try {
-    const res = await fetch("https://connector-gateway.lovable.dev/resend/emails", {
+    const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "X-Connection-Api-Key": RESEND_API_KEY,
-      },
-      body: JSON.stringify({ from, to: [to], subject, html }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        service_id: serviceId,
+        template_id: templateId,
+        user_id: publicKey,
+        accessToken: privateKey,
+        template_params: {
+          to_email: to,
+          subject,
+          message_html: html,
+          from_name: "Leave & Duty Roster",
+        },
+      }),
     });
     if (!res.ok) {
       const body = await res.text();
-      console.error(`Resend error [${res.status}] to=${to}:`, body);
+      console.error(`EmailJS error [${res.status}] to=${to}:`, body);
       return false;
     }
     return true;
   } catch (e) {
-    console.error("Resend fetch failed", e);
+    console.error("EmailJS fetch failed", e);
     return false;
   }
 }
