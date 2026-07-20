@@ -215,3 +215,47 @@ export const demoteFromAdmin = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+const DutyAssignSchema = z.object({
+  targetUserId: z.string().uuid(),
+  dutyDate: z.string(),
+  shift: z.string(),
+  notes: z.string().optional().default(""),
+});
+
+export const notifyDutyAssignment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => DutyAssignSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: isAdmin } = await supabase.rpc("has_role", {
+      _user_id: userId,
+      _role: "admin",
+    });
+    if (!isAdmin) throw new Error("Forbidden: admin only");
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("email, full_name")
+      .eq("id", data.targetUserId)
+      .single();
+    if (!profile?.email) return { ok: false, emailed: false };
+
+    const html = renderEmail({
+      accent: "#166534",
+      heading: "New duty assigned",
+      greeting: `Hi ${profile.full_name || "there"},`,
+      body: `<p>You have been assigned a new duty on
+          <b>${data.dutyDate}</b> — <b>${data.shift}</b>.</p>` +
+        (data.notes
+          ? `<p style="background:#f6faf5;border-left:3px solid #166534;padding:10px 12px;margin-top:14px"><b>Notes:</b><br/>${data.notes}</p>`
+          : "") +
+        `<p>Please sign in to view your roster.</p>`,
+    });
+    const result = await sendEmail({
+      to: profile.email,
+      subject: `Duty assigned: ${data.dutyDate} — ${data.shift}`,
+      html,
+    });
+    return { ok: true, emailed: result.ok };
+  });
