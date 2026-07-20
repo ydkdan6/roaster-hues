@@ -192,3 +192,26 @@ export const promoteToAdmin = createServerFn({ method: "POST" })
     if (error && !error.message.includes("duplicate")) throw new Error(error.message);
     return { ok: true };
   });
+
+const DemoteSchema = z.object({ targetUserId: z.string().uuid() });
+
+export const demoteFromAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => DemoteSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: isAdmin } = await supabase.rpc("has_role", {
+      _user_id: userId,
+      _role: "admin",
+    });
+    if (!isAdmin) throw new Error("Forbidden: admin only");
+    if (data.targetUserId === userId) throw new Error("You cannot remove your own admin role");
+
+    const { error } = await supabase
+      .from("user_roles")
+      .delete()
+      .eq("user_id", data.targetUserId)
+      .eq("role", "admin");
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
