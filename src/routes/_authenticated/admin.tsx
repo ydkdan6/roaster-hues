@@ -34,6 +34,7 @@ function Admin() {
   const decide = useServerFn(decideLeaveRequest);
   const promote = useServerFn(promoteToAdmin);
   const demote = useServerFn(demoteFromAdmin);
+  const notifyDuty = useServerFn(notifyDutyAssignment);
 
   const [leaves, setLeaves] = useState<Leave[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
