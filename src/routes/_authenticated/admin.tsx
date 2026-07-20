@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { decideLeaveRequest, promoteToAdmin, demoteFromAdmin } from "@/lib/leave-email.functions";
+import { decideLeaveRequest, promoteToAdmin, demoteFromAdmin, notifyDutyAssignment } from "@/lib/leave-email.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -100,7 +100,13 @@ function Admin() {
       user_id: rUser, duty_date: rDate, shift: rShift, notes: rNotes, created_by: user.id,
     });
     if (error) return toast.error(error.message);
-    toast.success("Duty added");
+    try {
+      const res = await notifyDuty({ data: { targetUserId: rUser, dutyDate: rDate, shift: rShift, notes: rNotes || "" } });
+      toast.success(`Duty added${res?.emailed ? " — staff notified" : ""}`);
+      if (res && !res.emailed) toast.warning("Duty saved but email notification failed.");
+    } catch {
+      toast.success("Duty added");
+    }
     setRUser(""); setRDate(""); setRNotes("");
     load();
   }
