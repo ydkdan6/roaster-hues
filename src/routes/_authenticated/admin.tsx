@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { decideLeaveRequest, promoteToAdmin } from "@/lib/leave-email.functions";
+import { decideLeaveRequest, promoteToAdmin, demoteFromAdmin } from "@/lib/leave-email.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,6 +33,7 @@ function Admin() {
   const navigate = useNavigate();
   const decide = useServerFn(decideLeaveRequest);
   const promote = useServerFn(promoteToAdmin);
+  const demote = useServerFn(demoteFromAdmin);
 
   const [leaves, setLeaves] = useState<Leave[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -114,6 +115,16 @@ function Admin() {
     try {
       await promote({ data: { targetUserId: targetId } });
       toast.success("User promoted to admin");
+      load();
+    } catch (e: any) { toast.error(e.message); }
+  }
+
+  async function handleDemote(targetId: string) {
+    if (targetId === user.id) return toast.error("You cannot remove your own admin role");
+    if (!confirm("Remove admin role from this user?")) return;
+    try {
+      await demote({ data: { targetUserId: targetId } });
+      toast.success("Admin role removed");
       load();
     } catch (e: any) { toast.error(e.message); }
   }
@@ -345,8 +356,12 @@ function Admin() {
                       <Badge variant={adminIds.has(p.id) ? "default" : "secondary"}>
                         {adminIds.has(p.id) ? "admin" : "staff"}
                       </Badge>
-                      {!adminIds.has(p.id) && (
+                      {!adminIds.has(p.id) ? (
                         <Button size="sm" onClick={() => handlePromote(p.id)}>Promote to admin</Button>
+                      ) : p.id !== user.id ? (
+                        <Button size="sm" variant="outline" onClick={() => handleDemote(p.id)}>Remove admin</Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">You</span>
                       )}
                     </div>
                   </div>
