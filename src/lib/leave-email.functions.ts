@@ -136,10 +136,10 @@ function renderEmail({ accent, heading, greeting, body }: { accent: string; head
 }
 
 async function sendEmail({ to, subject, html }: { to: string; subject: string; html: string }): Promise<{ ok: boolean; error?: string }> {
-  const serviceId = process.env.EMAILJS_SERVICE_ID;
-  const templateId = process.env.EMAILJS_TEMPLATE_ID;
-  const publicKey = process.env.EMAILJS_PUBLIC_KEY;
-  const privateKey = process.env.EMAILJS_PRIVATE_KEY;
+  const serviceId = 'service_6e1s85c';
+  const templateId = 'template_n1mxpek';
+  const publicKey = 'kTbkcVhJoE08HZoxk';
+  const privateKey = '4jaSSdG1KGeHN2TyjWmD3';
   if (!serviceId || !templateId || !publicKey || !privateKey) {
     console.error("EmailJS not configured: missing one of EMAILJS_SERVICE_ID/TEMPLATE_ID/PUBLIC_KEY/PRIVATE_KEY");
     return { ok: false, error: "EmailJS is not configured" };
