@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.lookup_email_by_auth_id_code(TEXT) FROM PUBLIC, anon, authenticated;
