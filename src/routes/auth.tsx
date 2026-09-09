@@ -59,7 +59,7 @@ function ForgotAuthIdDialog() {
    setLoading(true);
    try {
      await requestAuthIdRecovery(fullName, email, note);
-     toast.success("Request sent. Admin will verify and contact you.");
+     toast.success("Request sent. Admin will verify and contact you surely.");
      setOpen(false);
    } catch {
      toast.error("Something went wrong. Try again.");
