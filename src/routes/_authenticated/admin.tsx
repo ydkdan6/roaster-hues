@@ -590,7 +590,7 @@ async function load() {
                     <div>
                       <div className="font-medium">{p.full_name || "(no name)"}</div>
                       <div className="text-xs text-muted-foreground">{p.email}</div>
-                      <div className="text-xs text-muted-foreground">{p.auth_id}</div>
+                      <div className="text-xs text-muted-foreground">User Auth Code: <b>{p.auth_id}</b></div>
                     </div>
                     <div className="flex items-center gap-3">
                       <Badge variant={adminIds.has(p.id) ? "default" : "secondary"}>
