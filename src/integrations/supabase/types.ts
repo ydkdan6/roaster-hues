@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      auth_id_requests: {
+        Row: {
+          created_at: string
+          department: string | null
+          full_name: string
+          id: string
+          message: string
+          registered_email: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          department?: string | null
+          full_name: string
+          id?: string
+          message: string
+          registered_email: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          department?: string | null
+          full_name?: string
+          id?: string
+          message?: string
+          registered_email?: string
+          status?: string
+        }
+        Relationships: []
+      }
       duty_roster: {
         Row: {
           created_at: string
@@ -91,6 +121,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          auth_id_code: string
           created_at: string
           department: string | null
           email: string
@@ -99,6 +130,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          auth_id_code: string
           created_at?: string
           department?: string | null
           email: string
@@ -107,6 +139,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          auth_id_code?: string
           created_at?: string
           department?: string | null
           email?: string
@@ -142,6 +175,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      generate_auth_id_code: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -149,6 +183,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      lookup_email_by_auth_id_code: { Args: { _code: string }; Returns: string }
     }
     Enums: {
       app_role: "admin" | "staff"
