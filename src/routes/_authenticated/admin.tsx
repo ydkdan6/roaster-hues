@@ -24,7 +24,7 @@ interface Leave {
   start_date: string; end_date: string; reason: string;
   status: "pending" | "approved" | "rejected"; admin_note: string | null; created_at: string;
 }
-interface Profile { id: string; full_name: string; email: string; }
+interface Profile { id: string; full_name: string; email: string; auth_id: string; }
 interface Duty { id: string; user_id: string; duty_date: string; shift: string; notes: string | null; }
 interface Role { user_id: string; role: string; }
 
@@ -58,7 +58,7 @@ function Admin() {
   async function load() {
     const [l, p, d, r] = await Promise.all([
       supabase.from("leave_requests").select("*").order("created_at", { ascending: false }),
-      supabase.from("profiles").select("id, full_name, email"),
+      supabase.from("profiles").select("id, full_name, email, auth_id"),
       supabase.from("duty_roster").select("*").order("duty_date"),
       supabase.from("user_roles").select("user_id, role"),
     ]);
@@ -154,26 +154,52 @@ function Admin() {
               <p className="text-xs text-muted-foreground">{user.email}</p>
             </div>
           </div>
-          <Button variant="outline" onClick={signOut}>Sign out</Button>
+          <Button variant="outline" onClick={signOut}>
+            Sign out
+          </Button>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-8">
         <Tabs defaultValue="leaves">
           <TabsList className="bg-secondary/60">
-            <TabsTrigger value="leaves"><ClipboardList className="w-4 h-4 mr-1.5" />Leave Requests</TabsTrigger>
-            <TabsTrigger value="roster"><CalendarDays className="w-4 h-4 mr-1.5" />Duty Roster</TabsTrigger>
+            <TabsTrigger value="leaves">
+              <ClipboardList className="w-4 h-4 mr-1.5" />
+              Leave Requests
+            </TabsTrigger>
+            <TabsTrigger value="roster">
+              <CalendarDays className="w-4 h-4 mr-1.5" />
+              Duty Roster
+            </TabsTrigger>
             <TabsTrigger value="reports">Reports</TabsTrigger>
-            <TabsTrigger value="users"><Users className="w-4 h-4 mr-1.5" />Users</TabsTrigger>
+            <TabsTrigger value="users">
+              <Users className="w-4 h-4 mr-1.5" />
+              Users
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="leaves" className="space-y-3 mt-4">
-            {leaves.length === 0 && <p className="text-sm text-muted-foreground">No leave requests.</p>}
+            {leaves.length === 0 && (
+              <p className="text-sm text-muted-foreground">No leave requests.</p>
+            )}
             {leaves.map((l) => {
               const p = profileMap.get(l.user_id);
-              const staffChoices = profiles.filter((pf) => pf.id !== l.user_id && !adminIds.has(pf.id));
+              const staffChoices = profiles.filter(
+                (pf) => pf.id !== l.user_id && !adminIds.has(pf.id),
+              );
               return (
-                <Card key={l.id} className="border-l-4" style={{ borderLeftColor: l.status === "approved" ? "var(--primary)" : l.status === "rejected" ? "var(--destructive)" : "var(--accent)" }}>
+                <Card
+                  key={l.id}
+                  className="border-l-4"
+                  style={{
+                    borderLeftColor:
+                      l.status === "approved"
+                        ? "var(--primary)"
+                        : l.status === "rejected"
+                          ? "var(--destructive)"
+                          : "var(--accent)",
+                  }}
+                >
                   <CardContent className="pt-6 space-y-3">
                     <div className="flex items-start justify-between gap-4">
                       <div>
@@ -184,7 +210,15 @@ function Admin() {
                         </div>
                         <div className="text-sm text-muted-foreground mt-1">{l.reason}</div>
                       </div>
-                      <Badge variant={l.status === "approved" ? "default" : l.status === "rejected" ? "destructive" : "secondary"}>
+                      <Badge
+                        variant={
+                          l.status === "approved"
+                            ? "default"
+                            : l.status === "rejected"
+                              ? "destructive"
+                              : "secondary"
+                        }
+                      >
                         {l.status}
                       </Badge>
                     </div>
@@ -192,16 +226,24 @@ function Admin() {
                       <div className="space-y-2 pt-2 border-t border-border">
                         <div className="space-y-2">
                           <Label className="text-xs">Assign coverage to (optional)</Label>
-                          <Select value={covers[l.id] ?? ""} onValueChange={(v) => setCovers({ ...covers, [l.id]: v })}>
-                            <SelectTrigger><SelectValue placeholder="Pick a staff to cover during leave" /></SelectTrigger>
+                          <Select
+                            value={covers[l.id] ?? ""}
+                            onValueChange={(v) => setCovers({ ...covers, [l.id]: v })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Pick a staff to cover during leave" />
+                            </SelectTrigger>
                             <SelectContent>
                               {staffChoices.map((s) => (
-                                <SelectItem key={s.id} value={s.id}>{s.full_name || s.email}</SelectItem>
+                                <SelectItem key={s.id} value={s.id}>
+                                  {s.full_name || s.email}
+                                </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                           <p className="text-[11px] text-muted-foreground">
-                            On approval, duty roster entries are auto-created for the covering staff for each day of leave.
+                            On approval, duty roster entries are auto-created for the covering staff
+                            for each day of leave.
                           </p>
                         </div>
                         <Textarea
@@ -210,17 +252,26 @@ function Admin() {
                           onChange={(e) => setNotes({ ...notes, [l.id]: e.target.value })}
                         />
                         <div className="flex gap-2">
-                          <Button disabled={busy === l.id} onClick={() => handleDecision(l.id, "approved")}>
+                          <Button
+                            disabled={busy === l.id}
+                            onClick={() => handleDecision(l.id, "approved")}
+                          >
                             <CheckCircle2 className="w-4 h-4 mr-1.5" /> Approve
                           </Button>
-                          <Button variant="destructive" disabled={busy === l.id} onClick={() => handleDecision(l.id, "rejected")}>
+                          <Button
+                            variant="destructive"
+                            disabled={busy === l.id}
+                            onClick={() => handleDecision(l.id, "rejected")}
+                          >
                             <XCircle className="w-4 h-4 mr-1.5" /> Reject
                           </Button>
                         </div>
                       </div>
                     )}
                     {l.admin_note && l.status !== "pending" && (
-                      <div className="text-xs p-2 rounded bg-secondary text-secondary-foreground">Note: {l.admin_note}</div>
+                      <div className="text-xs p-2 rounded bg-secondary text-secondary-foreground">
+                        Note: {l.admin_note}
+                      </div>
                     )}
                   </CardContent>
                 </Card>
@@ -230,34 +281,55 @@ function Admin() {
 
           <TabsContent value="roster" className="mt-4 space-y-6">
             <Card>
-              <CardHeader><CardTitle>Generate duty</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle>Generate duty</CardTitle>
+              </CardHeader>
               <CardContent>
                 <form onSubmit={addRoster} className="grid md:grid-cols-4 gap-3 items-end">
                   <div className="space-y-2">
                     <Label>Staff</Label>
                     <Select value={rUser} onValueChange={setRUser}>
-                      <SelectTrigger><SelectValue placeholder="Select staff" /></SelectTrigger>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select staff" />
+                      </SelectTrigger>
                       <SelectContent>
-                        {profiles.filter(p => !adminIds.has(p.id)).map((p) => (
-                          <SelectItem key={p.id} value={p.id}>{p.full_name || p.email}</SelectItem>
-                        ))}
+                        {profiles
+                          .filter((p) => !adminIds.has(p.id))
+                          .map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.full_name || p.email}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
                     <Label>Date</Label>
-                    <Input type="date" required value={rDate} onChange={(e) => setRDate(e.target.value)} />
+                    <Input
+                      type="date"
+                      required
+                      value={rDate}
+                      onChange={(e) => setRDate(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Shift</Label>
                     <Select value={rShift} onValueChange={setRShift}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
-                        {["Morning","Afternoon","Night"].map(s => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+                        {["Morning", "Afternoon", "Night"].map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {s}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
-                  <Button type="submit" disabled={!rUser || !rDate}>Add duty</Button>
+                  <Button type="submit" disabled={!rUser || !rDate}>
+                    Add duty
+                  </Button>
                   <div className="md:col-span-4 space-y-2">
                     <Label>Notes (optional)</Label>
                     <Input value={rNotes} onChange={(e) => setRNotes(e.target.value)} />
@@ -266,18 +338,30 @@ function Admin() {
               </CardContent>
             </Card>
             <Card>
-              <CardHeader><CardTitle>Roster</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle>Roster</CardTitle>
+              </CardHeader>
               <CardContent className="space-y-2">
-                {duties.length === 0 && <p className="text-sm text-muted-foreground">No duties yet.</p>}
+                {duties.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No duties yet.</p>
+                )}
                 {duties.map((d) => {
                   const p = profileMap.get(d.user_id);
                   return (
-                    <div key={d.id} className="flex items-center justify-between p-3 rounded border border-border">
+                    <div
+                      key={d.id}
+                      className="flex items-center justify-between p-3 rounded border border-border"
+                    >
                       <div>
                         <div className="font-medium">{p?.full_name || p?.email}</div>
-                        <div className="text-xs text-muted-foreground">{d.duty_date} · {d.shift}{d.notes ? ` · ${d.notes}`:""}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {d.duty_date} · {d.shift}
+                          {d.notes ? ` · ${d.notes}` : ""}
+                        </div>
                       </div>
-                      <Button size="sm" variant="ghost" onClick={() => removeRoster(d.id)}>Remove</Button>
+                      <Button size="sm" variant="ghost" onClick={() => removeRoster(d.id)}>
+                        Remove
+                      </Button>
                     </div>
                   );
                 })}
@@ -287,25 +371,55 @@ function Admin() {
 
           <TabsContent value="reports" className="mt-4">
             <div className="grid md:grid-cols-4 gap-4">
-              <ReportStat label="Total requests" value={leaves.length} icon={<ClipboardList className="w-5 h-5" />} onClick={() => setReportView("total")} />
-              <ReportStat label="Approved" value={leaves.filter(l => l.status === "approved").length} icon={<CheckCircle2 className="w-5 h-5" />} tone="primary" onClick={() => setReportView("approved")} />
-              <ReportStat label="Rejected" value={leaves.filter(l => l.status === "rejected").length} icon={<XCircle className="w-5 h-5" />} tone="destructive" onClick={() => setReportView("rejected")} />
-              <ReportStat label="Pending" value={leaves.filter(l => l.status === "pending").length} icon={<Clock className="w-5 h-5" />} tone="accent" onClick={() => setReportView("pending")} />
+              <ReportStat
+                label="Total requests"
+                value={leaves.length}
+                icon={<ClipboardList className="w-5 h-5" />}
+                onClick={() => setReportView("total")}
+              />
+              <ReportStat
+                label="Approved"
+                value={leaves.filter((l) => l.status === "approved").length}
+                icon={<CheckCircle2 className="w-5 h-5" />}
+                tone="primary"
+                onClick={() => setReportView("approved")}
+              />
+              <ReportStat
+                label="Rejected"
+                value={leaves.filter((l) => l.status === "rejected").length}
+                icon={<XCircle className="w-5 h-5" />}
+                tone="destructive"
+                onClick={() => setReportView("rejected")}
+              />
+              <ReportStat
+                label="Pending"
+                value={leaves.filter((l) => l.status === "pending").length}
+                icon={<Clock className="w-5 h-5" />}
+                tone="accent"
+                onClick={() => setReportView("pending")}
+              />
             </div>
-            <p className="text-xs text-muted-foreground mt-2">Click any card to see the full history.</p>
+            <p className="text-xs text-muted-foreground mt-2">
+              Click any card to see the full history.
+            </p>
             <Card className="mt-4">
-              <CardHeader><CardTitle>Leave summary by staff</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle>Leave summary by staff</CardTitle>
+              </CardHeader>
               <CardContent className="space-y-1">
                 {profiles.map((p) => {
                   const mine = leaves.filter((l) => l.user_id === p.id);
                   if (mine.length === 0) return null;
                   return (
-                    <div key={p.id} className="flex justify-between text-sm py-1 border-b border-border last:border-0">
+                    <div
+                      key={p.id}
+                      className="flex justify-between text-sm py-1 border-b border-border last:border-0"
+                    >
                       <span>{p.full_name || p.email}</span>
                       <span className="text-muted-foreground">
-                        {mine.filter(l => l.status === "approved").length} approved ·
-                        {" "}{mine.filter(l => l.status === "rejected").length} rejected ·
-                        {" "}{mine.filter(l => l.status === "pending").length} pending
+                        {mine.filter((l) => l.status === "approved").length} approved ·{" "}
+                        {mine.filter((l) => l.status === "rejected").length} rejected ·{" "}
+                        {mine.filter((l) => l.status === "pending").length} pending
                       </span>
                     </div>
                   );
@@ -318,32 +432,59 @@ function Admin() {
                 <DialogHeader>
                   <DialogTitle className="capitalize">{reportView} leave history</DialogTitle>
                   <DialogDescription>
-                    {reportView === "total" ? "All leave requests submitted." : `All ${reportView} leave requests.`}
+                    {reportView === "total"
+                      ? "All leave requests submitted."
+                      : `All ${reportView} leave requests.`}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="max-h-[60vh] overflow-y-auto space-y-2 pr-1">
-                  {(reportView ? leaves.filter(l => reportView === "total" ? true : l.status === reportView) : []).map((l) => {
+                  {(reportView
+                    ? leaves.filter((l) =>
+                        reportView === "total" ? true : l.status === reportView,
+                      )
+                    : []
+                  ).map((l) => {
                     const p = profileMap.get(l.user_id);
                     return (
                       <div key={l.id} className="p-3 rounded-lg border border-border">
                         <div className="flex items-center justify-between">
                           <div className="font-medium">{p?.full_name || p?.email}</div>
-                          <Badge variant={l.status === "approved" ? "default" : l.status === "rejected" ? "destructive" : "secondary"}>
+                          <Badge
+                            variant={
+                              l.status === "approved"
+                                ? "default"
+                                : l.status === "rejected"
+                                  ? "destructive"
+                                  : "secondary"
+                            }
+                          >
                             {l.status}
                           </Badge>
                         </div>
-                        <div className="text-sm mt-1"><b>{l.leave_type}</b> · {l.start_date} → {l.end_date}</div>
-                        {l.reason && <div className="text-sm text-muted-foreground mt-1">{l.reason}</div>}
-                        {l.admin_note && <div className="text-xs mt-1 p-2 rounded bg-secondary text-secondary-foreground">Admin: {l.admin_note}</div>}
+                        <div className="text-sm mt-1">
+                          <b>{l.leave_type}</b> · {l.start_date} → {l.end_date}
+                        </div>
+                        {l.reason && (
+                          <div className="text-sm text-muted-foreground mt-1">{l.reason}</div>
+                        )}
+                        {l.admin_note && (
+                          <div className="text-xs mt-1 p-2 rounded bg-secondary text-secondary-foreground">
+                            Admin: {l.admin_note}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
-                  {reportView && leaves.filter(l => reportView === "total" ? true : l.status === reportView).length === 0 && (
-                    <p className="text-sm text-muted-foreground text-center py-6">No records.</p>
-                  )}
+                  {reportView &&
+                    leaves.filter((l) => (reportView === "total" ? true : l.status === reportView))
+                      .length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-6">No records.</p>
+                    )}
                 </div>
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setReportView(null)}>Close</Button>
+                  <Button variant="outline" onClick={() => setReportView(null)}>
+                    Close
+                  </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -351,22 +492,32 @@ function Admin() {
 
           <TabsContent value="users" className="mt-4">
             <Card>
-              <CardHeader><CardTitle>User management</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle>User management</CardTitle>
+              </CardHeader>
               <CardContent className="space-y-2">
                 {profiles.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between p-3 rounded border border-border">
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between p-3 rounded border border-border"
+                  >
                     <div>
                       <div className="font-medium">{p.full_name || "(no name)"}</div>
                       <div className="text-xs text-muted-foreground">{p.email}</div>
+                      <div className="text-xs text-muted-foreground">{`Auth Code: ${p.auth_id}`}</div>
                     </div>
                     <div className="flex items-center gap-3">
                       <Badge variant={adminIds.has(p.id) ? "default" : "secondary"}>
                         {adminIds.has(p.id) ? "admin" : "staff"}
                       </Badge>
                       {!adminIds.has(p.id) ? (
-                        <Button size="sm" onClick={() => handlePromote(p.id)}>Promote to admin</Button>
+                        <Button size="sm" onClick={() => handlePromote(p.id)}>
+                          Promote to admin
+                        </Button>
                       ) : p.id !== user.id ? (
-                        <Button size="sm" variant="outline" onClick={() => handleDemote(p.id)}>Remove admin</Button>
+                        <Button size="sm" variant="outline" onClick={() => handleDemote(p.id)}>
+                          Remove admin
+                        </Button>
                       ) : (
                         <span className="text-xs text-muted-foreground">You</span>
                       )}
