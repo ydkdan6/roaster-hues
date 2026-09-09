@@ -2,7 +2,6 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 // import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-// import { assignAuthId, resolveAuthId, requestAuthIdRecovery } from "@/lib/auth-id.functions";
 import { assignAuthId, resolveAuthId, requestAuthIdRecovery } from "@/lib/auth-id.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,19 +54,19 @@ function ForgotAuthIdDialog() {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
 
-async function submit(e: React.FormEvent) {
-  e.preventDefault();
-  setLoading(true);
-  try {
-    await requestAuthIdRecovery(fullName, email, note);
-    toast.success("Request sent. Admin will verify and contact you.");
-    setOpen(false);
-  } catch {
-    toast.error("Something went wrong. Try again.");
-  } finally {
-    setLoading(false);
-  }
-}
+ async function submit(e: React.FormEvent) {
+   e.preventDefault();
+   setLoading(true);
+   try {
+     await requestAuthIdRecovery(fullName, email, note);
+     toast.success("Request sent. Admin will verify and contact you.");
+     setOpen(false);
+   } catch {
+     toast.error("Something went wrong. Try again.");
+   } finally {
+     setLoading(false);
+   }
+ }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -256,9 +255,7 @@ function AuthPage() {
                           <Label>Auth ID</Label>
                           <Input
                             required
-                            // maxLength={6}
-                            // className="font-mono tracking-[0.3em] uppercase"
-                            placeholder="A1B2C3"
+                            placeholder=""
                             value={identifier}
                             onChange={(e) => setIdentifier(e.target.value)}
                           />

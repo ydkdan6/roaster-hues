@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { CheckCircle2, XCircle, Clock, ClipboardList, Users, CalendarDays, ShieldCheck } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, ClipboardList, Users, CalendarDays, ShieldCheck, Copy, Check, Inbox } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   component: Admin,
@@ -24,9 +24,10 @@ interface Leave {
   start_date: string; end_date: string; reason: string;
   status: "pending" | "approved" | "rejected"; admin_note: string | null; created_at: string;
 }
-interface Profile { id: string; full_name: string; email: string; auth_id: string; }
+interface Profile { id: string; full_name: string; email: string; auth_id_code: string; auth_id: string; department?: string | null; }
 interface Duty { id: string; user_id: string; duty_date: string; shift: string; notes: string | null; }
 interface Role { user_id: string; role: string; }
+interface AuthIdRequest { id: string; full_name: string; registered_email: string; department: string | null; message: string; status: string; created_at: string; }
 
 function Admin() {
   const { user, isAdmin } = Route.useRouteContext();
@@ -40,6 +41,8 @@ function Admin() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [duties, setDuties] = useState<Duty[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
+  const [authIdRequests, setAuthIdRequests] = useState<AuthIdRequest[]>([]);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [covers, setCovers] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
@@ -55,17 +58,40 @@ function Admin() {
     if (!isAdmin) navigate({ to: "/dashboard" });
   }, [isAdmin, navigate]);
 
-  async function load() {
-    const [l, p, d, r] = await Promise.all([
-      supabase.from("leave_requests").select("*").order("created_at", { ascending: false }),
-      supabase.from("profiles").select("id, full_name, email, auth_id"),
-      supabase.from("duty_roster").select("*").order("duty_date"),
-      supabase.from("user_roles").select("user_id, role"),
-    ]);
-    if (l.data) setLeaves(l.data as Leave[]);
-    if (p.data) setProfiles(p.data as Profile[]);
-    if (d.data) setDuties(d.data as Duty[]);
-    if (r.data) setRoles(r.data as Role[]);
+async function load() {
+  const [l, p, d, r, authRequests] = await Promise.all([
+    supabase.from("leave_requests").select("*").order("created_at", { ascending: false }),
+
+    supabase.from("profiles").select("id, full_name, email, auth_id_code, auth_id"),
+
+    supabase.from("duty_roster").select("*").order("duty_date"),
+
+    supabase.from("user_roles").select("user_id, role"),
+
+    supabase.from("auth_id_requests").select("*").order("created_at", { ascending: false }),
+  ]);
+
+  if (l.data) setLeaves(l.data as Leave[]);
+  if (p.data) setProfiles(p.data as Profile[]);
+  if (d.data) setDuties(d.data as Duty[]);
+  if (r.data) setRoles(r.data as Role[]);
+  if (authRequests.data) {
+    setAuthIdRequests(authRequests.data as AuthIdRequest[]);
+  }
+}
+
+  async function copyUserId(code: string) {
+    await navigator.clipboard.writeText(code);
+    setCopiedId(code);
+    toast.success("Auth ID copied");
+    window.setTimeout(() => setCopiedId(null), 1800);
+  }
+
+  async function resolveRequest(id: string) {
+    const { error } = await supabase.from("auth_id_requests").update({ status: "resolved" }).eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Recovery request marked resolved");
+    load();
   }
   useEffect(() => { load(); }, []);
 
@@ -490,7 +516,67 @@ function Admin() {
             </Dialog>
           </TabsContent>
 
-          <TabsContent value="users" className="mt-4">
+          <TabsContent value="users" className="mt-4 space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Inbox className="w-5 h-5 text-primary" />
+                  Auth ID recovery requests
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {authIdRequests.filter((request) => request.status === "pending").length === 0 && (
+                  <p className="text-sm text-muted-foreground">No pending recovery requests.</p>
+                )}
+                {authIdRequests
+                  .filter((request) => request.status === "pending")
+                  .map((request) => {
+                    const matchedProfile = profiles.find(
+                      (profile) =>
+                        profile.email.toLowerCase() === request.registered_email.toLowerCase(),
+                    );
+                    return (
+                      <div
+                        key={request.id}
+                        className="rounded-lg border border-border p-4 space-y-3"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="font-medium">{request.full_name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {request.registered_email}
+                              {request.department ? ` · ${request.department}` : ""}
+                            </div>
+                          </div>
+                          <Badge variant="secondary">pending</Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">{request.message}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="rounded-md bg-secondary px-3 py-2 text-sm">
+                            {matchedProfile
+                              ? `Auth ID: ${matchedProfile.auth_id_code}`
+                              : "No matching profile found"}
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              matchedProfile && copyUserId(matchedProfile.auth_id_code)
+                            }
+                            disabled={!matchedProfile}
+                          >
+                            <Copy />
+                            Copy ID
+                          </Button>
+                          <Button size="sm" onClick={() => resolveRequest(request.id)}>
+                            Mark resolved
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader>
                 <CardTitle>User management</CardTitle>
@@ -504,7 +590,7 @@ function Admin() {
                     <div>
                       <div className="font-medium">{p.full_name || "(no name)"}</div>
                       <div className="text-xs text-muted-foreground">{p.email}</div>
-                      <div className="text-xs text-muted-foreground">{`Auth Code: ${p.auth_id}`}</div>
+                      <div className="text-xs text-muted-foreground">{p.auth_id}</div>
                     </div>
                     <div className="flex items-center gap-3">
                       <Badge variant={adminIds.has(p.id) ? "default" : "secondary"}>
